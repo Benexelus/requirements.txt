@@ -1,5 +1,6 @@
-tkinter
+streamlit
+matplotlib.pyplot
+pandas
 json
 statistics
-matplotlib.pyplot
-streamlit
+mplcursors
