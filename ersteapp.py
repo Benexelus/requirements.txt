@@ -1,12 +1,23 @@
-import tkinter as tk
-from tkinter import messagebox, filedialog
+import streamlit as st
+import matplotlib.pyplot as plt
+import pandas as pd
 import json
 import statistics
-import matplotlib.pyplot as plt
+import mplcursors
+
+st.set_page_config(page_title="Zahlenanalyse – Q1 Lernapp", layout="centered")
+
+st.title("📊 Zahlenanalyse – Lernapp (Q1)")
+st.write("Gib ganze Zahlen ein und analysiere sie Schritt für Schritt.")
 
 # -----------------------------
-# Analyse-Funktionen
+# Eingabe
 # -----------------------------
+
+text_input = st.text_area(
+    "Ganze Zahlen eingeben (mit Leerzeichen oder Komma trennen):",
+    height=120
+)
 
 def parse_numbers(text):
     try:
@@ -15,143 +26,119 @@ def parse_numbers(text):
             raise ValueError
         return numbers
     except:
-        messagebox.showerror("Fehler", "Bitte nur ganze Zahlen eingeben.")
+        st.error("❌ Bitte nur ganze Zahlen eingeben.")
         return None
 
+# -----------------------------
+# Analyse
+# -----------------------------
 
-def analyze_numbers(numbers):
-    analysis = {
-        "sorted_asc": sorted(numbers),
-        "sorted_desc": sorted(numbers, reverse=True),
-        "max": max(numbers),
-        "min": min(numbers),
-        "positive": [n for n in numbers if n >= 0],
-        "negative": [n for n in numbers if n < 0],
-        "mean": statistics.mean(numbers),
-        "repetitions": {n: numbers.count(n) for n in set(numbers)}
+if st.button("🔍 Analysieren"):
+    numbers = parse_numbers(text_input)
+
+    if numbers:
+        analysis = {
+            "Aufsteigend": sorted(numbers),
+            "Absteigend": sorted(numbers, reverse=True),
+            "Maximum": max(numbers),
+            "Minimum": min(numbers),
+            "Positive Zahlen": [n for n in numbers if n >= 0],
+            "Negative Zahlen": [n for n in numbers if n < 0],
+            "Durchschnitt": statistics.mean(numbers),
+            "Wiederholungen": {n: numbers.count(n) for n in sorted(set(numbers))}
+        }
+
+        st.session_state["numbers"] = numbers
+        st.session_state["analysis"] = analysis
+
+# -----------------------------
+# Ausgabe Text
+# -----------------------------
+
+if "analysis" in st.session_state:
+    st.subheader("📘 Analyseergebnisse")
+
+    a = st.session_state["analysis"]
+
+    st.write("**Sortiert (aufsteigend):**", a["Aufsteigend"])
+    st.write("**Sortiert (absteigend):**", a["Absteigend"])
+    st.write("**Höchster Wert:**", a["Maximum"])
+    st.write("**Tiefster Wert:**", a["Minimum"])
+    st.write("**Positive Zahlen:**", a["Positive Zahlen"])
+    st.write("**Negative Zahlen:**", a["Negative Zahlen"])
+    st.write("**Durchschnitt:**", round(a["Durchschnitt"], 2))
+
+    st.write("**Wiederholungen:**")
+    st.json(a["Wiederholungen"])
+
+# -----------------------------
+# Diagramm
+# -----------------------------
+
+if "numbers" in st.session_state:
+    st.subheader("📈 Interaktives Diagramm")
+
+    numbers = st.session_state["numbers"]
+    mean = st.session_state["analysis"]["Durchschnitt"]
+
+    fig, ax = plt.subplots()
+    line = ax.plot(numbers, marker="o", label="Zahlen")[0]
+
+    ax.axhline(mean, linestyle="--", label="Durchschnitt")
+    ax.scatter(
+        [i for i, n in enumerate(numbers) if n == max(numbers)],
+        [max(numbers)] * numbers.count(max(numbers)),
+        color="green", s=80, label="Maximum"
+    )
+    ax.scatter(
+        [i for i, n in enumerate(numbers) if n == min(numbers)],
+        [min(numbers)] * numbers.count(min(numbers)),
+        color="red", s=80, label="Minimum"
+    )
+
+    ax.set_xlabel("Position")
+    ax.set_ylabel("Wert")
+    ax.set_title("Zahlenfolge mit Hoch- & Tiefpunkten")
+    ax.legend()
+    ax.grid(True)
+
+    cursor = mplcursors.cursor(line, hover=True)
+    cursor.connect(
+        "add",
+        lambda sel: sel.annotation.set_text(
+            f"Wert: {numbers[int(sel.target.index)]}"
+        )
+    )
+
+    st.pyplot(fig)
+
+# -----------------------------
+# Speichern & Laden
+# -----------------------------
+
+st.subheader("💾 Projekt speichern / laden")
+
+if "numbers" in st.session_state:
+    project = json.dumps(st.session_state["numbers"])
+    st.download_button(
+        "⬇️ Projekt speichern",
+        data=project,
+        file_name="zahlen_projekt.json",
+        mime="application/json"
+    )
+
+uploaded = st.file_uploader("📂 Projekt laden", type="json")
+if uploaded:
+    loaded_numbers = json.load(uploaded)
+    st.session_state["numbers"] = loaded_numbers
+    st.session_state["analysis"] = {
+        "Aufsteigend": sorted(loaded_numbers),
+        "Absteigend": sorted(loaded_numbers, reverse=True),
+        "Maximum": max(loaded_numbers),
+        "Minimum": min(loaded_numbers),
+        "Positive Zahlen": [n for n in loaded_numbers if n >= 0],
+        "Negative Zahlen": [n for n in loaded_numbers if n < 0],
+        "Durchschnitt": statistics.mean(loaded_numbers),
+        "Wiederholungen": {n: loaded_numbers.count(n) for n in sorted(set(loaded_numbers))}
     }
-    return analysis
-
-
-# -----------------------------
-# Diagramme
-# -----------------------------
-
-def show_diagram(numbers, analysis):
-    plt.figure("Zahlenanalyse")
-
-    plt.plot(numbers, marker="o", label="Zahlenfolge")
-    plt.axhline(analysis["mean"], linestyle="--", label="Durchschnitt")
-
-    plt.scatter(numbers.index(analysis["max"]), analysis["max"], color="green", s=100, label="Maximum")
-    plt.scatter(numbers.index(analysis["min"]), analysis["min"], color="red", s=100, label="Minimum")
-
-    plt.title("Interaktive Zahlenanalyse")
-    plt.xlabel("Position")
-    plt.ylabel("Wert")
-    plt.legend()
-    plt.grid(True)
-
-    plt.show()
-
-
-# -----------------------------
-# GUI
-# -----------------------------
-
-class ZahlenApp:
-
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Zahlenanalyse – Lernapp (Q1)")
-        self.root.geometry("700x500")
-
-        tk.Label(root, text="Ganze Zahlen eingeben:", font=("Arial", 12)).pack(pady=5)
-
-        self.text_input = tk.Text(root, height=5)
-        self.text_input.pack(fill="x", padx=10)
-
-        tk.Label(
-            root,
-            text="Zahlen mit Leerzeichen oder Komma trennen",
-            fg="gray"
-        ).pack()
-
-        button_frame = tk.Frame(root)
-        button_frame.pack(pady=10)
-
-        tk.Button(button_frame, text="Analysieren", command=self.run_analysis).grid(row=0, column=0, padx=5)
-        tk.Button(button_frame, text="Diagramm", command=self.show_plot).grid(row=0, column=1, padx=5)
-        tk.Button(button_frame, text="Speichern", command=self.save_project).grid(row=0, column=2, padx=5)
-        tk.Button(button_frame, text="Laden", command=self.load_project).grid(row=0, column=3, padx=5)
-
-        self.output = tk.Text(root, height=15)
-        self.output.pack(fill="both", expand=True, padx=10, pady=10)
-
-        self.numbers = []
-        self.analysis = None
-
-
-    def run_analysis(self):
-        text = self.text_input.get("1.0", "end")
-        numbers = parse_numbers(text)
-        if not numbers:
-            return
-
-        self.numbers = numbers
-        self.analysis = analyze_numbers(numbers)
-
-        self.output.delete("1.0", "end")
-        self.output.insert("end", f"Sortiert aufsteigend: {self.analysis['sorted_asc']}\n")
-        self.output.insert("end", f"Sortiert absteigend: {self.analysis['sorted_desc']}\n\n")
-
-        self.output.insert("end", f"Höchster Wert: {self.analysis['max']}\n")
-        self.output.insert("end", f"Tiefster Wert: {self.analysis['min']}\n\n")
-
-        self.output.insert("end", f"Positive Zahlen: {self.analysis['positive']}\n")
-        self.output.insert("end", f"Negative Zahlen: {self.analysis['negative']}\n\n")
-
-        self.output.insert("end", f"Durchschnitt: {self.analysis['mean']}\n")
-        self.output.insert("end", f"Wiederholungen:\n")
-
-        for k, v in self.analysis["repetitions"].items():
-            self.output.insert("end", f"  {k}: {v}x\n")
-
-
-    def show_plot(self):
-        if not self.analysis:
-            messagebox.showwarning("Hinweis", "Bitte zuerst analysieren.")
-            return
-        show_diagram(self.numbers, self.analysis)
-
-
-    def save_project(self):
-        if not self.numbers:
-            return
-
-        file = filedialog.asksaveasfilename(defaultextension=".json")
-        if file:
-            with open(file, "w") as f:
-                json.dump(self.numbers, f)
-            messagebox.showinfo("Gespeichert", "Projekt gespeichert.")
-
-
-    def load_project(self):
-        file = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
-        if file:
-            with open(file, "r") as f:
-                self.numbers = json.load(f)
-
-            self.text_input.delete("1.0", "end")
-            self.text_input.insert("end", " ".join(map(str, self.numbers)))
-            self.run_analysis()
-
-
-# -----------------------------
-# Start
-# -----------------------------
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = ZahlenApp(root)
-    root.mainloop()
+    st.success("✅ Projekt erfolgreich geladen!")
